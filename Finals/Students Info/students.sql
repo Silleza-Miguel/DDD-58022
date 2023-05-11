@@ -22,3 +22,6 @@ SELECT * FROM students_info.students_info where not status = '4TH YEAR' order by
 
 -- Students arranged by semestral grade -- 
 SELECT * FROM students_info.students_info order by sem_grade desc;
+
+-- Students who are male and in 1st Year -- 
+SELECT * FROM students_info.students_info where gender = 'M' and status = '1ST YEAR';
