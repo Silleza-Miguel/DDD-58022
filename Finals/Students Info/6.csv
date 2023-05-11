@@ -1,0 +1,8 @@
+id,first_name,last_name,date_of_birth,gender,status,email,entry_age,quiz_1,quiz_2,prelim_exam,midterm_exam,final_exam,sem_grade,city,municipality,hs_zip
+111114,Frank,Cruz,"February 13, 2010",M,"3RD YEAR",fcruz@example.com,19,20,8,90,92,100,85,Manila,"Sta. Ana",85015
+111112,Jane,Samora,"May 1, 2012",F,"2ND YEAR",jsamora@example.com,18,13,11,86,84,36,95,Cavite,Imus,10009
+111115,Mike,Davis,"January 14, 2012",F,"2ND YEAR",mdavis@example.com,18,22,12,50,95,95,87,Bulacan,Washington,98106
+111116,Jennifer,Bautista,"April 3, 2011",M,"2ND YEAR",jbautista@example.com,18,20,4,85,84,90,91,Batangas,"San Luis",80012
+111111,John,Dalas,"January 10, 2012",M,"1ST YEAR",jdalas@example.com,17,12,10,87,88,86,90,Batangas,Nasugbu,87112
+111113,Sarah,Perez,"August 5, 2011",M,"1ST YEAR",sperez@example.com,17,14,6,50,93,41,90,Bulacan,Marilao,85006
+111119,Bob,Lopez,"April 9, 2013",F,"1ST YEAR",blopez@example.com,18,15,5,45,55,100,80,Laguna,Calamba,80122
