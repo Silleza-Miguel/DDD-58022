@@ -13,6 +13,7 @@ api = mangadex.Api()
 mydb = mysql.connector.Connect(host='127.0.0.1', user='root', password='imgonkms', port='3306', autocommit=True)
 mycursor = mydb.cursor()
 
+
 class ViewMenu:
     def __init__(self, window):
         def adjust_scrollregion(event):
@@ -289,6 +290,7 @@ class ViewMenu:
             pass
         widget.destroy()
         ViewManga(window, manga.manga_id)
+
 
 class ViewManga:
     def __init__(self, window, mangaid, ):
