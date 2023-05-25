@@ -1,9 +1,10 @@
 from tkinter import *
-from tkinter.ttk import Notebook, Progressbar
+from tkinter.ttk import Notebook, Progressbar, Separator
 import mangadex
 from PIL import Image, ImageTk
 from io import BytesIO
-import threading, time, requests, mysql.connector, queue, os
+from datetime import datetime
+import threading, requests, mysql.connector, queue, os, shutil
 
 window = Tk()
 q = queue.Queue()
@@ -17,9 +18,17 @@ class ViewMenu:
         def adjust_scrollregion(event):
             self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
+        mycursor.execute('create database if not exists histori;')
+        mycursor.execute('create database if not exists download;')
+
+        mycursor.execute('create table if not exists download.manga(mangaid varchar(100) primary key, title varchar(100), date_added datetime);')
+        mycursor.execute('create table if not exists histori.manga(mangaid varchar(100) primary key, title varchar(100), date_added datetime);')
+
         self.coverid = []
         self.num = 1
         self.current_text = ''
+
+        window.bind('<Return>', lambda event: self.result(self.textbar))
 
         self.menu_frame = Frame(window)
         self.menu_frame.pack(fill=BOTH, expand=True)
@@ -39,10 +48,10 @@ class ViewMenu:
         self.notebook.pack(expand=True, fill=BOTH)
 
         #   Search Tab
-        self.searchtab_frame = Frame(self.searchtab, bg='red')
+        self.searchtab_frame = Frame(self.searchtab, relief=FLAT)
         self.searchtab_frame.pack(expand=TRUE, fill=BOTH)
 
-        self.canvas = Canvas(self.searchtab_frame, bg='blue')
+        self.canvas = Canvas(self.searchtab_frame, relief=FLAT)
         self.canvas.pack(side=LEFT, fill=BOTH, expand=TRUE)
 
         self.scroll = Scrollbar(self.searchtab_frame, bd=0, command=self.canvas.yview)
@@ -51,22 +60,22 @@ class ViewMenu:
         self.canvas.configure(yscrollcommand=self.scroll.set)
         self.canvas.bind('<Configure>', lambda event: self.canvas.configure(scrollregion=self.canvas.bbox('all')))
 
-        self.scroll_frame = Frame(self.canvas, bg='red', padx=150)
+        self.scroll_frame = Frame(self.canvas, padx=150)
 
         self.screen_width = self.scroll_frame.winfo_screenwidth()
         self.canvas.create_window((0, 0), window=self.scroll_frame, anchor='n')
 
         self.scroll_frame.bind("<Configure>", adjust_scrollregion, add="+")
 
-        self.searchbox_frame = Frame(self.scroll_frame, bg='yellow')
+        self.searchbox_frame = Frame(self.scroll_frame)
         self.searchbox_frame.pack(side=TOP, ipady=40)
 
-        self.searchbutton = Button(self.searchbox_frame, text='Search', command=lambda: t.Thread(target=lambda:self.result(self.textbar)).start())
+        self.textbar = Text(self.searchbox_frame, height=1, font='Lato 12', width=130, padx=6, pady=8, relief=FLAT)
+        self.textbar.pack(side=LEFT)
+
+        self.searchbutton = Button(self.searchbox_frame, text='Search', font='Lato 12 bold',  bg='#ed603d', fg='#fdfdfd', padx=6, pady=2, relief=FLAT, command=lambda: t.Thread(target=lambda:self.result(self.textbar)).start())
         self.searchbutton.pack(side=RIGHT)
         self.searchbutton.bind('<Return>', lambda event: self.result(self.textbar))
-
-        self.textbar = Text(self.searchbox_frame, height=1, font='Lato 12', width=130)
-        self.textbar.pack(side=LEFT)
 
         self.result_frame = Frame(self.scroll_frame)
         self.result_frame.pack(side=TOP)
@@ -84,7 +93,7 @@ class ViewMenu:
         self.canvas_history.configure(yscrollcommand=self.scroll_history.set)
         self.canvas_history.bind('<Configure>', lambda event: self.canvas_history.configure(scrollregion=self.canvas_history.bbox('all')))
 
-        self.scroll_frame_history = Frame(self.canvas_history, bg='red', padx=150)
+        self.scroll_frame_history = Frame(self.canvas_history, padx=150)
 
         self.canvas_history.create_window((0, 0), window=self.scroll_frame_history, anchor='n')
 
@@ -93,13 +102,13 @@ class ViewMenu:
         self.frame = Frame(self.scroll_frame_history)
         self.frame.pack(side=TOP)
 
-        mycursor.execute(f"SELECT COUNT(*) FROM history.manga;")
+        mycursor.execute(f"SELECT COUNT(*) FROM histori.manga;")
         self.count = mycursor.fetchall()[0][0]
 
         for i in range(self.count):
-            mycursor.execute(f"SELECT * FROM history.manga;")
+            mycursor.execute(f"SELECT * FROM histori.manga order by date_added desc;")
             self.id = mycursor.fetchall()[i][0]
-            threading.Thread(target=lambda:self.add_result(self.id, self.frame)).start()
+            threading.Thread(target=lambda:self.add_result(self.id, self.frame, i)).start()
 
         #   Downloads Tab
         self.downloadtab_frame = Frame(self.downloadtab)
@@ -114,7 +123,7 @@ class ViewMenu:
         self.canvas_download.configure(yscrollcommand=self.scroll_download.set)
         self.canvas_download.bind('<Configure>', lambda event: self.canvas_download.configure(scrollregion=self.canvas_download.bbox('all')))
 
-        self.scroll_frame_download = Frame(self.canvas_download, bg='red', padx=150)
+        self.scroll_frame_download = Frame(self.canvas_download, padx=150)
 
         self.canvas_download.create_window((0, 0), window=self.scroll_frame_download, anchor='n')
 
@@ -129,7 +138,7 @@ class ViewMenu:
         for i in range(self.count):
             mycursor.execute(f"SELECT * FROM download.manga;")
             self.id = mycursor.fetchall()[i][0]
-            t.Thread(target=lambda:self.add_result(self.id, self.framee)).start()
+            t.Thread(target=lambda:self.add_result(self.id, self.framee, i)).start()
 
         #   Settings Tab
         self.settingstab_frame = Frame(self.settingstab)
@@ -142,34 +151,96 @@ class ViewMenu:
         self.scroll_settings.pack(side=RIGHT, fill=Y)
 
         self.canvas_settings.configure(yscrollcommand=self.scroll_settings.set)
-        self.canvas_settings.bind('<Configure>', lambda event: self.canvas_settings.configure(
-            scrollregion=self.canvas_settings.bbox('all')))
+        self.canvas_settings.bind('<Configure>', lambda event: self.canvas_settings.configure(scrollregion=self.canvas_settings.bbox('all')))
 
-        self.scroll_frame_settings = Frame(self.canvas_settings, bg='red', padx=150)
+        self.scroll_frame_settings = Frame(self.canvas_settings, padx=150)
 
         self.canvas_settings.create_window((0, 0), window=self.scroll_frame_settings, anchor='n')
 
         self.scroll_frame_settings.bind("<Configure>", adjust_scrollregion)
 
         self.frameee = Frame(self.scroll_frame_settings)
-        self.frameee.pack(side=TOP)
+        self.frameee.pack()
 
+        #   Delete History
+        self.delete_history_frame = Frame(self.frameee, width=1232, height=100)
+        self.delete_history_frame.pack(side=TOP)
+        self.delete_history_frame.pack_propagate(0)
+
+        self.delete_history_text_frame = Frame(self.delete_history_frame)
+        self.delete_history_text_frame.pack(side=LEFT)
+
+        self.delete_history_title = Label(self.delete_history_text_frame, text='Clear History', font='Lato 12 bold', justify=LEFT, anchor=W)
+        self.delete_history_title.pack(fill=X, ipady=5, padx=(18, 0))
+
+        self.delete_history_desc = Label(self.delete_history_text_frame, text='Clears your reading history.', font='Lato 10', justify=LEFT, anchor=W)
+        self.delete_history_desc.pack(fill=X, ipady=5, padx=(18, 0))
+
+        self.delete_history_button_frame = Label(self.delete_history_frame)
+        self.delete_history_button_frame.pack(side=RIGHT)
+
+        self.delete_history_button = Button(self.delete_history_button_frame, text='DELETE', font='Lato 12 bold',  bg='#ed603d', fg='#fdfdfd', relief=FLAT, anchor=S, command=lambda: self.del_history())
+        self.delete_history_button.pack(side=BOTTOM)
+
+        self.sep1 = Separator(self.frameee, orient=HORIZONTAL)
+        self.sep1.pack(fill=X)
+
+        #   Delete Download
+        self.delete_frame = Frame(self.frameee,  width=1232, height=100)
+        self.delete_frame.pack(side=TOP)
+        self.delete_frame.pack_propagate(0)
+
+        self.delete_frame_inside = Frame(self.delete_frame, relief=FLAT)
+        self.delete_frame_inside.pack(side=LEFT)
+
+        self.delete_title = Label(self.delete_frame_inside, text='Clear Downloads', font='Lato 12 bold', justify=LEFT, anchor=W)
+        self.delete_title.pack(fill=X, ipady=5, padx=(18, 0))
+
+        self.delete_desc = Label(self.delete_frame_inside, text='Deletes all mangas from your downloads.', font='Lato 10', justify=LEFT, anchor=W)
+        self.delete_desc.pack(fill=X, ipady=5, padx=(18, 0))
+
+        self.delete_button_frame = Frame(self.delete_frame, )
+        self.delete_button_frame.pack(side=RIGHT)
+
+        self.delete_button = Button(self.delete_button_frame, text='DELETE', font='Lato 12 bold',  bg='#ed603d', fg='#fdfdfd', anchor=S, relief=FLAT, command=lambda: self.del_download())
+        self.delete_button.pack(side=BOTTOM)
+
+    def del_history(self):
+        mycursor.execute(f'delete from histori.manga;')
+        for widgets in self.frame.winfo_children():
+            widgets.destroy()
+
+    def del_download(self):
+        mycursor.execute(f'delete from download.manga;')
+        mycursor.execute(f'SET SESSION group_concat_max_len = 1000000;')
+        mycursor.execute(f'SELECT GROUP_CONCAT(DISTINCT CONCAT("DROP DATABASE ", table_schema, ";") SEPARATOR "\n") FROM information_schema.tables WHERE table_schema NOT IN ("mysql", "information_schema", "performance_schema",  "download", "histori");')
+
+        for i in str(mycursor.fetchall()[0][0]).splitlines():
+            print(i)
+            mycursor.execute(f'{i}')
+
+        for widgets in self.framee.winfo_children():
+            widgets.destroy()
+
+        rootdir = os.path.abspath(os.curdir)
+        path = f"{rootdir}\Downloads"
+
+        for filename in os.listdir(path):
+            shutil.rmtree(f'{path}\{filename}', ignore_errors=True)
 
     def result(self, text):
-        if self.current_text == text:
-            pass
-        else:
-            self.current_text = text
-            if len(self.result_frame.winfo_children()) > 0:
-                for widget in self.result_frame.winfo_children():
-                    widget.destroy()
+        print(len(self.result_frame.winfo_children()))
+        if len(self.result_frame.winfo_children()) > 0:
+            for widget in self.result_frame.winfo_children():
+                widget.destroy()
+                print('destroyed')
 
-            self.list = api.get_manga_list(title=text.get("1.0", END))
+        self.list = api.get_manga_list(title=text.get("1.0", END))
 
-            for i in range(len(self.list)):
-                threading.Thread(target=lambda: self.add_result(self.list[i].manga_id, self.result_frame)).start()
+        for i in range(len(self.list)):
+            threading.Thread(target=lambda: self.add_result(self.list[i].manga_id, self.result_frame, i)).start()
 
-    def add_result(self, id, frame):
+    def add_result(self, id, frame, count):
         manga = (api.view_manga_by_id(manga_id=id))
         url = api.get_cover(coverId=manga.coverId).fetch_cover_image()
         r = requests.get(url)
@@ -182,39 +253,54 @@ class ViewMenu:
         pilImage = im.resize((new_width, new_height))
         photo = ImageTk.PhotoImage(pilImage)
 
+        desc = manga.description['en'].splitlines()
+        del desc[1:]
+        new_desc = "\n".join(str(line) for line in desc)
+        newnew_desc = (new_desc[:105] + '...') if len(new_desc) > 75 else new_desc
+        # print(newnew_desc)
+
         self.label = Button(frame,
-                            text=f'{manga.title["en"]}\n\n\n{manga.description["en"]}',
+                            text=f'       {manga.title["en"]}\n       {api.get_author_by_id(author_id=manga.authorId[0]).name}\n\n       {newnew_desc}',
                             image=photo,
+                            font='lato 15',
                             compound=LEFT,
                             height=200,
                             justify=LEFT,
+                            width=1232,
                             anchor=W,
                             wraplength='28c',
-                            width='32c',
                             command=lambda: t.Thread(target=lambda:self.getshit(manga, self.menu_frame)).start())
 
-        print(f'{manga.title["en"]}')
-        print(manga.description["en"].count("\n"))
+        # print(f'{manga.title["en"]}')
+        # print(manga.description["en"].count("\n"))
         self.label.image = photo
-        self.label.pack(side=TOP)
+        self.label.grid(column=1, row=count, pady=5)
+
+
+    def red(self, event=None):
+        self.label.configure(fg='red')
+
+    def black(self, event=None):
+        self.label.configure(fg='red')
 
     def getshit(self, manga, widget):
         try:
-            mycursor.execute(f'insert into history.manga(mangaid, title) values("{manga.manga_id}", "{manga.title["en"]}") ;')
+            mycursor.execute(f'insert into histori.manga(mangaid, title, date_added) values("{manga.manga_id}", "{manga.title["en"]}", "{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}");')
             pass
         except mysql.connector.errors.IntegrityError:
-            mycursor.execute(f'delete from history.manga where mangaid =  "{manga.manga_id}";')
-            mycursor.execute(f'insert into history.manga(mangaid, title) values("{manga.manga_id}", "{manga.title["en"]}") ;')
+            mycursor.execute(f'delete from histori.manga where mangaid =  "{manga.manga_id}";')
+            mycursor.execute(f'insert into histori.manga(mangaid, title, date_added) values("{manga.manga_id}", "{manga.title["en"]}", "{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}");')
             pass
         widget.destroy()
         ViewManga(window, manga.manga_id)
 
 class ViewManga:
-    def __init__(self, window, mangaid):
+    def __init__(self, window, mangaid, ):
         self.threads = []
         self.i = 0
         self.j = 2
         self.chapter_id_list = []
+        self.allpages = []
         self.page_links = []
         self.page_count = 0
         self.chapter_name = ''
@@ -238,6 +324,10 @@ class ViewManga:
 
         self.manga_frame = Frame(window)
         self.manga_frame.pack(fill=BOTH, expand=True)
+
+        window.bind('<Escape>', lambda event: self.to_menu(self.manga_frame))
+        window.bind('<Right>', lambda event: self.next())
+        window.bind('<Left>', lambda event: self.prev())
 
         #   MENU UI Frame
         self.menu_frame = Frame(self.manga_frame, bg="#18191b")
@@ -313,7 +403,7 @@ class ViewManga:
                             else:
                                 continue
 
-        print(f'chapter id: {self.chapter_id_list}')
+        # print(f'chapter id: {self.chapter_id_list}')
         self.listbox_chapter.config(yscrollcommand=self.scroll_chapter.set)
         self.listbox_chapter.yview_moveto('1.0')
         self.scroll_chapter.config(command=self.listbox_chapter.yview)
@@ -355,38 +445,40 @@ class ViewManga:
         self.listbox_page.bind('<Double-Button>', lambda event: self.skip_page(self.listbox_page))
 
         #   MENU BUTTON
-        self.menu_button_frame = Frame(self.button_frame3, bg='yellow')
+        self.menu_button_frame = Frame(self.button_frame3, bg='#18191b')
         self.menu_button_frame.pack()
 
-        self.menu = Button(self.menu_button_frame, text='Menu', command=lambda: self.to_menu(self.manga_frame))
-        self.menu.pack()
+        self.menu = Button(self.menu_button_frame, text='Menu', font='Lato 12 bold',  bg='#ed603d', fg='#fdfdfd', width=11, padx=4, relief=FLAT, command=lambda: self.to_menu(self.manga_frame))
+        self.menu.pack(pady=5)
 
-        self.downloads = Button(self.menu_button_frame, text = 'Download', command=lambda: t.Thread(target=lambda:self.download(self.manga)).start())
-        self.downloads.pack()
+        self.downloads = Button(self.menu_button_frame, text = 'Download', font='Lato 12 bold',  bg='#ed603d', fg='#fdfdfd', width=11, padx=4, relief=FLAT, command=lambda: t.Thread(target=lambda:self.download(self.manga)).start())
+        self.downloads.pack(pady=5)
 
         #   IMAGE
         self.page = Label(self.page_frame, text='Loading...', bg='#000000', fg='#fdfdfd')
         self.page.pack(side=BOTTOM, fill=NONE, expand=TRUE)
 
-        self.load_chapter(self.first_chapter.id, 'start')
+        mycursor.execute(f'select exists(SELECT * FROM download.manga where mangaid = "{mangaid}");')
+        self.in_download = mycursor.fetchall()[0][0]
+
+        if self.in_download == 1:
+            print('hi')
+
+        elif self.in_download == 0:
+            self.load_chapter_online(self.first_chapter.id, 'start')
 
     def database(self, schema):
         mycursor.execute(f'create database {schema};')
-        mycursor.execute(f"create table {schema}.chapvol(link varchar(50) primary key, chapter varchar(10), volume varchar(5), location text(100));")
-        mycursor.execute(f"create table {schema}.pages(chapter_link varchar(50) primary key, pages int, link text(50), location text(100), foreign key (chapter_link) references {schema}.chapvol(link));")
+        mycursor.execute(f"create table {schema}.chapvol(link varchar(50) primary key, chapter varchar(10), volume varchar(5), pages bigint, location text(100));")
+        mycursor.execute(f"create table {schema}.pages(chapter_link varchar(50), pages int, link varchar(300) primary key, location text(100), foreign key (chapter_link) references {schema}.chapvol(link));")
 
         for key, value in self.manga_list.items():
             for i in value:
                 if i == 'chapters':
                     for j, k in dict(value[i]).items():
-                        mycursor.execute(f'insert into {schema}.chapvol(chapter, volume) values("{j}", "{key}");')
                         for l in k:
                             if l == 'id':
-                                mycursor.execute(
-                                    f'insert into {schema}.chapvol set chapter={j}, link="{k[l]}" on duplicate key update link="{k[l]}";')
-                            else:
-                                continue
-
+                                mycursor.execute(f'insert into {schema}.chapvol(link, chapter, volume) values ("{k[l]}", "{j}", "{key}");')
 
     def to_menu(self, widget):
         widget.destroy()
@@ -424,7 +516,7 @@ class ViewManga:
                 self.page_links.clear()
                 self.listbox_page.delete(0, 'end')
 
-                t.Thread(target=lambda: self.load_chapter(self.value, 'start')).start()
+                t.Thread(target=lambda: self.load_chapter_online(self.value, 'start')).start()
 
             else:
                 print('this is the same chapter')
@@ -468,12 +560,17 @@ class ViewManga:
 
             path = fr"{path}\\Chapter {ey}"
 
+            mycursor.execute(f'update {str(manga.title["en"].replace(" ", "_").lower())}.chapvol set location = "{path}" where link = "{chapters}";')
+
             if os.path.exists(path) == False:
                 os.makedirs(path)
 
             images = api.get_chapter(chapter_id=chapters).fetch_chapter_images()
 
+            mycursor.execute(f'update {str(manga.title["en"].replace(" ", "_").lower())}.chapvol set pages = "{len(images)}" where link = "{chapters}";')
+
             for url in range(len(images)):
+                mycursor.execute(f'insert into {str(manga.title["en"].replace(" ", "_").lower())}.pages(chapter_link, pages, link, location) values("{chapters}", "{eys}", "{images[url]}", "{path}\\Page {eys}.png");')
                 t = threading.Thread(target=self.download_image, args=(images, url, path, eys))
                 self.threads.append(t)
                 t.start()
@@ -481,6 +578,7 @@ class ViewManga:
 
             for thread in self.threads:
                 thread.join()
+
 
             self.progress['value']=(ey/len(self.chapter_id_list))*100
             self.menu_button_frame.update_idletasks()
@@ -499,7 +597,7 @@ class ViewManga:
         eys += 1
         print(f'page {eys} downloaded')
 
-    def load_chapter(self, chapter, key):
+    def load_chapter_online(self, chapter, key):
 
         self.chapter_link = chapter
 
@@ -524,7 +622,6 @@ class ViewManga:
             self.threads.append(t)
             t.start()
 
-        print(self.threads)
         print('Pages finished loading.')
         print(f'Page Count:{self.page_count}')
 
@@ -579,7 +676,7 @@ class ViewManga:
                 self.page_links.clear()
                 self.listbox_page.delete(0, 'end')
 
-                t.Thread(target=lambda: self.load_chapter(self.chapter_id_list[self.chapter_count], 'start')).start()
+                t.Thread(target=lambda: self.load_chapter_online(self.chapter_id_list[self.chapter_count], 'start')).start()
 
     def prev(self):
         if self.current_page > 0:
@@ -605,7 +702,7 @@ class ViewManga:
                 self.page.configure(text="loading...")
                 self.page_links.clear()
 
-                t.Thread(target=lambda: self.load_chapter(self.chapter_id_list[self.chapter_count], 'end')).start()
+                t.Thread(target=lambda: self.load_chapter_online(self.chapter_id_list[self.chapter_count], 'end')).start()
 
     def nextChap(self):
         print('Next Chapter')
@@ -617,7 +714,7 @@ class ViewManga:
         self.page_links.clear()
         self.listbox_page.delete(0, 'end')
 
-        t.Thread(target=lambda: self.load_chapter(self.chapter_id_list[self.chapter_count], 'start')).start()
+        t.Thread(target=lambda: self.load_chapter_online(self.chapter_id_list[self.chapter_count], 'start')).start()
 
     def prevChap(self):
         if self.chapter_count < -1:
@@ -630,7 +727,7 @@ class ViewManga:
             self.page_links.clear()
             self.listbox_page.delete(0, 'end')
 
-            t.Thread(target=lambda: self.load_chapter(self.chapter_id_list[self.chapter_count], 'start')).start()
+            t.Thread(target=lambda: self.load_chapter_online(self.chapter_id_list[self.chapter_count], 'start')).start()
 
 
 ViewMenu(window)
