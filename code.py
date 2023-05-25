@@ -213,7 +213,9 @@ class ViewMenu:
     def del_download(self):
         mycursor.execute(f'delete from download.manga;')
         mycursor.execute(f'SET SESSION group_concat_max_len = 1000000;')
-        mycursor.execute(f'SELECT GROUP_CONCAT(DISTINCT CONCAT("DROP DATABASE ", table_schema, ";") SEPARATOR "\n") FROM information_schema.tables WHERE table_schema NOT IN ("mysql", "information_schema", "performance_schema",  "download", "histori");')
+        mycursor.execute(f'SELECT GROUP_CONCAT(DISTINCT CONCAT("DROP DATABASE ", table_schema, ";") SEPARATOR "\n")'
+                         f'FROM information_schema.tables WHERE table_schema'
+                         f'NOT IN ("mysql", "information_schema", "performance_schema",  "download", "histori");')
 
         for i in str(mycursor.fetchall()[0][0]).splitlines():
             print(i)
@@ -257,7 +259,6 @@ class ViewMenu:
         del desc[1:]
         new_desc = "\n".join(str(line) for line in desc)
         newnew_desc = (new_desc[:105] + '...') if len(new_desc) > 75 else new_desc
-        # print(newnew_desc)
 
         self.label = Button(frame,
                             text=f'       {manga.title["en"]}\n       {api.get_author_by_id(author_id=manga.authorId[0]).name}\n\n       {newnew_desc}',
@@ -269,27 +270,22 @@ class ViewMenu:
                             width=1232,
                             anchor=W,
                             wraplength='28c',
-                            command=lambda: t.Thread(target=lambda:self.getshit(manga, self.menu_frame)).start())
+                            command=lambda: t.Thread(target=lambda:self.to_mangaview(manga, self.menu_frame)).start())
 
         # print(f'{manga.title["en"]}')
         # print(manga.description["en"].count("\n"))
         self.label.image = photo
         self.label.grid(column=1, row=count, pady=5)
 
-
-    def red(self, event=None):
-        self.label.configure(fg='red')
-
-    def black(self, event=None):
-        self.label.configure(fg='red')
-
-    def getshit(self, manga, widget):
+    def to_mangaview(self, manga, widget):
         try:
-            mycursor.execute(f'insert into histori.manga(mangaid, title, date_added) values("{manga.manga_id}", "{manga.title["en"]}", "{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}");')
+            mycursor.execute(f'insert into histori.manga(mangaid, title, date_added)'
+                             f'values("{manga.manga_id}", "{manga.title["en"]}", "{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}");')
             pass
         except mysql.connector.errors.IntegrityError:
             mycursor.execute(f'delete from histori.manga where mangaid =  "{manga.manga_id}";')
-            mycursor.execute(f'insert into histori.manga(mangaid, title, date_added) values("{manga.manga_id}", "{manga.title["en"]}", "{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}");')
+            mycursor.execute(f'insert into histori.manga(mangaid, title, date_added)'
+                             f'values("{manga.manga_id}", "{manga.title["en"]}", "{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}");')
             pass
         widget.destroy()
         ViewManga(window, manga.manga_id)
@@ -531,7 +527,8 @@ class ViewManga:
 
     def download(self, manga):
         try:
-            mycursor.execute(f'insert into download.manga(mangaid, title) values("{manga.manga_id}", "{manga.title["en"]}");')
+            mycursor.execute(f'insert into download.manga(mangaid, title)'
+                             f'values("{manga.manga_id}", "{manga.title["en"]}");')
 
         except mysql.connector.errors.IntegrityError:
             print('already in downloads')
@@ -560,17 +557,20 @@ class ViewManga:
 
             path = fr"{path}\\Chapter {ey}"
 
-            mycursor.execute(f'update {str(manga.title["en"].replace(" ", "_").lower())}.chapvol set location = "{path}" where link = "{chapters}";')
+            mycursor.execute(f'update {str(manga.title["en"].replace(" ", "_").lower())}.chapvol set location = "{path}"'
+                             f'where link = "{chapters}";')
 
             if os.path.exists(path) == False:
                 os.makedirs(path)
 
             images = api.get_chapter(chapter_id=chapters).fetch_chapter_images()
 
-            mycursor.execute(f'update {str(manga.title["en"].replace(" ", "_").lower())}.chapvol set pages = "{len(images)}" where link = "{chapters}";')
+            mycursor.execute(f'update {str(manga.title["en"].replace(" ", "_").lower())}.chapvol set pages = "{len(images)}"'
+                             f'where link = "{chapters}";')
 
             for url in range(len(images)):
-                mycursor.execute(f'insert into {str(manga.title["en"].replace(" ", "_").lower())}.pages(chapter_link, pages, link, location) values("{chapters}", "{eys}", "{images[url]}", "{path}\\Page {eys}.png");')
+                mycursor.execute(f'insert into {str(manga.title["en"].replace(" ", "_").lower())}.pages(chapter_link, pages, link, location)'
+                                 f'values("{chapters}", "{eys}", "{images[url]}", "{path}\\Page {eys}.png");')
                 t = threading.Thread(target=self.download_image, args=(images, url, path, eys))
                 self.threads.append(t)
                 t.start()
@@ -578,7 +578,6 @@ class ViewManga:
 
             for thread in self.threads:
                 thread.join()
-
 
             self.progress['value']=(ey/len(self.chapter_id_list))*100
             self.menu_button_frame.update_idletasks()
