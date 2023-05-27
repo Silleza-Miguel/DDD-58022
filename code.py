@@ -25,10 +25,6 @@ class ViewMenu:
         mycursor.execute('create table if not exists download.manga(mangaid varchar(100) primary key, title varchar(100), date_added datetime);')
         mycursor.execute('create table if not exists histori.manga(mangaid varchar(100) primary key, title varchar(100), date_added datetime);')
 
-        self.coverid = []
-        self.num = 1
-        self.current_text = ''
-
         window.bind('<Return>', lambda event: self.result(self.textbar))
 
         self.menu_frame = Frame(window)
