@@ -25,6 +25,8 @@ class ViewMenu:
         mycursor.execute('create table if not exists download.manga(mangaid varchar(100) primary key, title varchar(100), date_added datetime);')
         mycursor.execute('create table if not exists histori.manga(mangaid varchar(100) primary key, title varchar(100), date_added datetime);')
 
+        self.current_text = ''
+
         window.bind('<Return>', lambda event: self.result(self.textbar))
 
         self.menu_frame = Frame(window)
@@ -228,16 +230,22 @@ class ViewMenu:
             shutil.rmtree(f'{path}\{filename}', ignore_errors=True)
 
     def result(self, text):
-        print(len(self.result_frame.winfo_children()))
-        if len(self.result_frame.winfo_children()) > 0:
-            for widget in self.result_frame.winfo_children():
-                widget.destroy()
-                print('destroyed')
+        if self.current_text == text:
+            print('Same query')
+            pass
+        
+        else:
+            self.current_text = text
+            print(len(self.result_frame.winfo_children()))
+            if len(self.result_frame.winfo_children()) > 0:
+                for widget in self.result_frame.winfo_children():
+                    widget.destroy()
+                    print('destroyed')
 
-        self.list = api.get_manga_list(title=text.get("1.0", END))
+            self.list = api.get_manga_list(title=text.get("1.0", END))
 
-        for i in range(len(self.list)):
-            threading.Thread(target=lambda: self.add_result(self.list[i].manga_id, self.result_frame, i)).start()
+            for i in range(len(self.list)):
+                threading.Thread(target=lambda: self.add_result(self.list[i].manga_id, self.result_frame, i)).start()
 
     def add_result(self, id, frame, count):
         manga = (api.view_manga_by_id(manga_id=id))
