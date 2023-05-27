@@ -4,7 +4,7 @@ import mangadex
 from PIL import Image, ImageTk
 from io import BytesIO
 from datetime import datetime
-import threading, requests, mysql.connector, queue, os, shutil
+import threading, requests, mysql.connector, queue, os, shutil, re
 
 window = Tk()
 q = queue.Queue()
@@ -212,9 +212,7 @@ class ViewMenu:
     def del_download(self):
         mycursor.execute(f'delete from download.manga;')
         mycursor.execute(f'SET SESSION group_concat_max_len = 1000000;')
-        mycursor.execute(f'SELECT GROUP_CONCAT(DISTINCT CONCAT("DROP DATABASE ", table_schema, ";") SEPARATOR "\n")'
-                         f'FROM information_schema.tables WHERE table_schema'
-                         f'NOT IN ("mysql", "information_schema", "performance_schema",  "download", "histori");')
+        mycursor.execute(f'SELECT GROUP_CONCAT(DISTINCT CONCAT("DROP DATABASE ", table_schema, ";") SEPARATOR "\n") FROM information_schema.tables WHERE table_schema NOT IN ("mysql", "information_schema", "performance_schema",  "download", "histori");')
 
         for i in str(mycursor.fetchall()[0][0]).splitlines():
             print(i)
@@ -233,7 +231,7 @@ class ViewMenu:
         if self.current_text == text:
             print('Same query')
             pass
-        
+
         else:
             self.current_text = text
             print(len(self.result_frame.winfo_children()))
@@ -470,6 +468,9 @@ class ViewManga:
             self.load_chapter_online(self.first_chapter.id, 'start')
 
     def database(self, schema):
+
+        print(f'schema: {schema}')
+
         mycursor.execute(f'create database {schema};')
         mycursor.execute(f"create table {schema}.chapvol(link varchar(50) primary key, chapter varchar(10), volume varchar(5), pages bigint, location text(100));")
         mycursor.execute(f"create table {schema}.pages(chapter_link varchar(50), pages int, link varchar(300) primary key, location text(100), foreign key (chapter_link) references {schema}.chapvol(link));")
@@ -540,7 +541,7 @@ class ViewManga:
             print('already in downloads')
             return
 
-        self.database(str(manga.title["en"].replace(" ", "_").lower()))
+        self.database(re.sub(r'[^a-zA-Z0-9\s]+', '_', manga.title["en"]).replace(" ", "_").lower())
 
         ey = 1
 
@@ -555,7 +556,7 @@ class ViewManga:
         if os.path.exists(path) == False:
             os.makedirs(path)
 
-        self.progress = Progressbar(self.menu_button_frame, orient=HORIZONTAL, length=100, mode='determinate')
+        self.progress = Progressbar(self.menu_button_frame, orient=HORIZONTAL, length=126, mode='determinate')
         self.progress.pack(side=BOTTOM)
 
         for chapters in reversed(self.chapter_id_list):
